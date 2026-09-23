@@ -9,12 +9,15 @@ __declspec(dllimport) void   __stdcall ExitProcess(uint32_t uExitCode);
 
 static void *h_stdout;
 
+void __main(void) {
+}
+
 void term_print(const char *str) {
     uint32_t written;
     WriteFile(h_stdout, str, (uint32_t)strlen(str), &written, (void *)0);
 }
 
-int main(void) {
+int ectxt_main(void) {
     h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
     if (!h_stdout) {
         return 1;
@@ -27,6 +30,6 @@ int main(void) {
 }
 
 void mainCRTStartup(void) {
-    int ret = main();
+    int ret = ectxt_main();
     ExitProcess((uint32_t)ret);
 }
