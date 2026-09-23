@@ -1,31 +1,52 @@
+#include "hal/hal.h"
 #include "libc/stdio.h"
 #include "libc/string.h"
 
-#define STD_OUTPUT_HANDLE ((uint32_t)-11)
+__declspec(dllimport) void __stdcall ExitProcess(uint32_t uExitCode);
 
-__declspec(dllimport) void * __stdcall GetStdHandle(uint32_t nStdHandle);
-__declspec(dllimport) int    __stdcall WriteFile(void *hFile, const void *lpBuffer, uint32_t nNumberOfBytesToWrite, uint32_t *lpNumberOfBytesWritten, void *lpOverlapped);
-__declspec(dllimport) void   __stdcall ExitProcess(uint32_t uExitCode);
-
-static void *h_stdout;
-
-void __main(void) {
-}
+void __main(void) {}
 
 void term_print(const char *str) {
-    uint32_t written;
-    WriteFile(h_stdout, str, (uint32_t)strlen(str), &written, (void *)0);
+    hal_write(str, strlen(str));
 }
 
 int ectxt_main(void) {
-    h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
-    if (!h_stdout) {
+    if (!hal_init()) {
         return 1;
     }
 
-    printf("ECTXT Core Initialized. Freestanding mode: ACTIVE.\n");
-    printf("Platform: Windows x86_64 | Native NT Subsystem.\n");
+    int cols = 0, rows = 0;
+    hal_get_term_size(&cols, &rows);
 
+    hal_write("\x1b[2J\x1b[H", 7);
+
+    char msg[128];
+    snprintf(msg, sizeof(msg), "ECTXT HAL Test | Screen: %dx%d | Press Ctrl+Q to exit.\r\n", cols, rows);
+    hal_write(msg, strlen(msg));
+
+    while (1) {
+        int key = hal_read_key();
+        if (key == KEY_NONE) {
+            continue;
+        }
+
+        if (key == KEY_CTRL_Q) {
+            break;
+        }
+
+        char kbuf[64];
+        if (key >= 1000) {
+            snprintf(kbuf, sizeof(kbuf), "Special Key Pressed: %d\r\n", key);
+        } else if (key >= 32 && key <= 126) {
+            snprintf(kbuf, sizeof(kbuf), "Char Pressed: '%c' (ASCII %d)\r\n", (char)key, key);
+        } else {
+            snprintf(kbuf, sizeof(kbuf), "Control Code: %d\r\n", key);
+        }
+        hal_write(kbuf, strlen(kbuf));
+    }
+
+    hal_write("\x1b[2J\x1b[H", 7);
+    hal_shutdown();
     return 0;
 }
 
