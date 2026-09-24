@@ -48,9 +48,22 @@ int gb_load_data(GapBuffer *gb, const char *data, size_t len) {
     if (!gb_init(gb, len + GAP_DEFAULT_CAP)) {
         return 0;
     }
-    memcpy(gb->data + (gb->cap - len), data, len);
+
+    size_t clean_len = 0;
+    char *dest = gb->data + (gb->cap - len);
+
+    for (size_t i = 0; i < len; i++) {
+        if (data[i] != '\r') {
+            dest[clean_len++] = data[i];
+        }
+    }
+
+    if (clean_len < len) {
+        memmove(gb->data + (gb->cap - clean_len), dest, clean_len);
+    }
+
     gb->gap_start = 0;
-    gb->gap_end = gb->cap - len;
+    gb->gap_end = gb->cap - clean_len;
     return 1;
 }
 

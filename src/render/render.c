@@ -11,6 +11,7 @@ int render_init(RenderContext *ctx) {
     ctx->row_offset = 0;
     ctx->col_offset = 0;
     ctx->frame_cap = FRAME_BUFFER_SIZE;
+    ctx->status_msg[0] = '\0';
     ctx->frame_buf = (char *)hal_alloc(ctx->frame_cap);
 
     if (!ctx->frame_buf) {
@@ -86,8 +87,6 @@ void render_update(RenderContext *ctx, const GapBuffer *gb, const char *filename
 
     for (int r = 0; r < text_rows; r++) {
         size_t line_char_idx = 0;
-        char line_chars[256];
-        size_t line_char_count = 0;
 
         while (idx < buf_len) {
             char c = gb_char_at(gb, idx);
@@ -95,15 +94,13 @@ void render_update(RenderContext *ctx, const GapBuffer *gb, const char *filename
                 idx++;
                 break;
             }
-            if (line_char_idx >= ctx->col_offset && line_char_count < (size_t)ctx->screen_cols) {
-                line_chars[line_char_count++] = c;
+            if (c != '\r') {
+                if (line_char_idx >= ctx->col_offset && (line_char_idx - ctx->col_offset) < (size_t)ctx->screen_cols) {
+                    buf_append(fb, &flen, ctx->frame_cap, &c, 1);
+                }
+                line_char_idx++;
             }
-            line_char_idx++;
             idx++;
-        }
-
-        if (line_char_count > 0) {
-            buf_append(fb, &flen, ctx->frame_cap, line_chars, line_char_count);
         }
 
         buf_append(fb, &flen, ctx->frame_cap, "\x1b[K\r\n", 5);
