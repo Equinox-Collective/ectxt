@@ -42,7 +42,12 @@ static void buf_append(char *dest, size_t *len, size_t max_cap, const char *src,
     *len += src_len;
 }
 
-void render_update(RenderContext *ctx, const GapBuffer *gb) {
+void render_set_message(RenderContext *ctx, const char *msg) {
+    strncpy(ctx->status_msg, msg, sizeof(ctx->status_msg) - 1);
+    ctx->status_msg[sizeof(ctx->status_msg) - 1] = '\0';
+}
+
+void render_update(RenderContext *ctx, const GapBuffer *gb, const char *filename, int is_dirty) {
     size_t cur_row = 0, cur_col = 0;
     gb_get_cursor_coords(gb, &cur_row, &cur_col);
 
@@ -105,10 +110,13 @@ void render_update(RenderContext *ctx, const GapBuffer *gb) {
         current_line++;
     }
 
-    char status[128];
+    char status[160];
     int status_len = snprintf(status, sizeof(status), 
-                              "\x1b[7m ECTXT | Ln %d, Col %d | %d bytes | Ctrl+Q: Exit\x1b[K\x1b[0m", 
-                              (int)cur_row + 1, (int)cur_col + 1, (int)buf_len);
+        "\x1b[7m %s%s | Ln %d, Col %d | %d bytes | %s\x1b[K\x1b[0m", 
+        filename ? filename : "[No Name]",
+        is_dirty ? " *" : "",
+        (int)cur_row + 1, (int)cur_col + 1, (int)buf_len,
+        ctx->status_msg[0] ? ctx->status_msg : "Ctrl+S: Save | Ctrl+Q: Exit");
     buf_append(fb, &flen, ctx->frame_cap, status, (size_t)status_len);
 
     char cursor_pos[32];

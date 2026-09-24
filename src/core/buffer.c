@@ -43,6 +43,24 @@ int gb_init(GapBuffer *gb, size_t initial_cap) {
     return gb_grow(gb, initial_cap > 0 ? initial_cap : GAP_DEFAULT_CAP);
 }
 
+int gb_load_data(GapBuffer *gb, const char *data, size_t len) {
+    gb_free(gb);
+    if (!gb_init(gb, len + GAP_DEFAULT_CAP)) {
+        return 0;
+    }
+    memcpy(gb->data + (gb->cap - len), data, len);
+    gb->gap_start = 0;
+    gb->gap_end = gb->cap - len;
+    return 1;
+}
+
+void gb_get_chunks(const GapBuffer *gb, const char **p1, size_t *n1, const char **p2, size_t *n2) {
+    *p1 = gb->data;
+    *n1 = gb->gap_start;
+    *p2 = gb->data + gb->gap_end;
+    *n2 = gb->cap - gb->gap_end;
+}
+
 void gb_free(GapBuffer *gb) {
     if (gb->data) {
         hal_free(gb->data, gb->cap);

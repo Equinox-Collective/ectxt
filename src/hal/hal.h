@@ -33,4 +33,7 @@ void hal_write(const void *buf, size_t len);
 void *hal_alloc(size_t size);
 void hal_free(void *ptr, size_t size);
 
+int hal_file_read(const char *path, char **out_buf, size_t *out_size);
+int hal_file_write_chunks(const char *path, const void *p1, size_t n1, const void *p2, size_t n2);
+
 #endif

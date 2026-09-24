@@ -11,11 +11,13 @@ typedef struct {
     size_t col_offset;
     char *frame_buf;
     size_t frame_cap;
+    char status_msg[64];
 } RenderContext;
 
 int render_init(RenderContext *ctx);
 void render_free(RenderContext *ctx);
 void render_resize(RenderContext *ctx, int cols, int rows);
-void render_update(RenderContext *ctx, const GapBuffer *gb);
+void render_set_message(RenderContext *ctx, const char *msg);
+void render_update(RenderContext *ctx, const GapBuffer *gb, const char *filename, int is_dirty);
 
 #endif

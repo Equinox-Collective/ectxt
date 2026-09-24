@@ -12,9 +12,17 @@
 #define ENABLE_WRAP_AT_EOL_OUTPUT          0x0002
 #define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
 
-#define MEM_COMMIT   0x00001000
-#define MEM_RESERVE  0x00002000
-#define MEM_RELEASE  0x00008000
+#define GENERIC_READ     0x80000000
+#define GENERIC_WRITE    0x40000000
+#define FILE_SHARE_READ  0x00000001
+#define OPEN_EXISTING    3
+#define CREATE_ALWAYS    2
+#define FILE_ATTRIBUTE_NORMAL 0x00000080
+#define INVALID_HANDLE_VALUE  ((void *)(intptr_t)-1)
+
+#define MEM_COMMIT     0x00001000
+#define MEM_RESERVE    0x00002000
+#define MEM_RELEASE    0x00008000
 #define PAGE_READWRITE 0x04
 
 typedef struct {
@@ -45,6 +53,9 @@ __declspec(dllimport) int    __stdcall ReadFile(void *hFile, void *lpBuffer, uin
 __declspec(dllimport) int    __stdcall WriteFile(void *hFile, const void *lpBuffer, uint32_t nNumberOfBytesToWrite, uint32_t *lpNumberOfBytesWritten, void *lpOverlapped);
 __declspec(dllimport) void * __stdcall VirtualAlloc(void *lpAddress, size_t dwSize, uint32_t flAllocationType, uint32_t flProtect);
 __declspec(dllimport) int    __stdcall VirtualFree(void *lpAddress, size_t dwSize, uint32_t dwFreeType);
+__declspec(dllimport) void * __stdcall CreateFileA(const char *lpFileName, uint32_t dwDesiredAccess, uint32_t dwShareMode, void *lpSecurityAttributes, uint32_t dwCreationDisposition, uint32_t dwFlagsAndAttributes, void *hTemplateFile);
+__declspec(dllimport) uint32_t __stdcall GetFileSize(void *hFile, uint32_t *lpFileSizeHigh);
+__declspec(dllimport) int    __stdcall CloseHandle(void *hObject);
 
 static void *h_stdin;
 static void *h_stdout;
@@ -55,13 +66,8 @@ int hal_init(void) {
     h_stdin = GetStdHandle(STD_INPUT_HANDLE);
     h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
 
-    if (!h_stdin || !h_stdout) {
-        return 0;
-    }
-
-    if (!GetConsoleMode(h_stdin, &orig_in_mode) || !GetConsoleMode(h_stdout, &orig_out_mode)) {
-        return 0;
-    }
+    if (!h_stdin || !h_stdout) return 0;
+    if (!GetConsoleMode(h_stdin, &orig_in_mode) || !GetConsoleMode(h_stdout, &orig_out_mode)) return 0;
 
     uint32_t raw_in = orig_in_mode;
     raw_in &= ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT);
@@ -72,7 +78,6 @@ int hal_init(void) {
 
     SetConsoleMode(h_stdin, raw_in);
     SetConsoleMode(h_stdout, raw_out);
-
     return 1;
 }
 
@@ -99,17 +104,13 @@ void hal_write(const void *buf, size_t len) {
 
 static int hal_read_byte(uint8_t *b) {
     uint32_t read = 0;
-    if (!ReadFile(h_stdin, b, 1, &read, (void *)0) || read == 0) {
-        return 0;
-    }
+    if (!ReadFile(h_stdin, b, 1, &read, (void *)0) || read == 0) return 0;
     return 1;
 }
 
 int hal_read_key(void) {
     uint8_t c;
-    if (!hal_read_byte(&c)) {
-        return KEY_NONE;
-    }
+    if (!hal_read_byte(&c)) return KEY_NONE;
 
     if (c == 27) {
         uint8_t seq[3];
@@ -145,7 +146,6 @@ int hal_read_key(void) {
     }
 
     if (c == 8) return KEY_BACKSPACE;
-
     return (int)c;
 }
 
@@ -155,7 +155,61 @@ void *hal_alloc(size_t size) {
 
 void hal_free(void *ptr, size_t size) {
     (void)size;
-    if (ptr) {
-        VirtualFree(ptr, 0, MEM_RELEASE);
+    if (ptr) VirtualFree(ptr, 0, MEM_RELEASE);
+}
+
+int hal_file_read(const char *path, char **out_buf, size_t *out_size) {
+    void *h_file = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, (void *)0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, (void *)0);
+    if (h_file == INVALID_HANDLE_VALUE) return 0;
+
+    uint32_t size_high = 0;
+    uint32_t size_low = GetFileSize(h_file, &size_high);
+    if (size_low == 0xFFFFFFFF && size_high != 0) {
+        CloseHandle(h_file);
+        return 0;
     }
+
+    size_t total_size = (size_t)size_low;
+    char *buf = (char *)hal_alloc(total_size + 1);
+    if (!buf) {
+        CloseHandle(h_file);
+        return 0;
+    }
+
+    uint32_t bytes_read = 0;
+    if (!ReadFile(h_file, buf, size_low, &bytes_read, (void *)0) || bytes_read != size_low) {
+        hal_free(buf, total_size + 1);
+        CloseHandle(h_file);
+        return 0;
+    }
+
+    buf[total_size] = '\0';
+    CloseHandle(h_file);
+
+    *out_buf = buf;
+    *out_size = total_size;
+    return 1;
+}
+
+int hal_file_write_chunks(const char *path, const void *p1, size_t n1, const void *p2, size_t n2) {
+    void *h_file = CreateFileA(path, GENERIC_WRITE, 0, (void *)0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, (void *)0);
+    if (h_file == INVALID_HANDLE_VALUE) return 0;
+
+    uint32_t written = 0;
+    if (n1 > 0) {
+        if (!WriteFile(h_file, p1, (uint32_t)n1, &written, (void *)0) || written != (uint32_t)n1) {
+            CloseHandle(h_file);
+            return 0;
+        }
+    }
+
+    if (n2 > 0) {
+        if (!WriteFile(h_file, p2, (uint32_t)n2, &written, (void *)0) || written != (uint32_t)n2) {
+            CloseHandle(h_file);
+            return 0;
+        }
+    }
+
+    CloseHandle(h_file);
+    return 1;
 }
