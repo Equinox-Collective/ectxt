@@ -33,6 +33,17 @@ DOS_LDFLAGS = -Wl,-m,elf_i386 -Wl,-T,dos.ld -nostdlib
 DOS_SRCS = $(CORE_SRCS) src/hal/hal_dos.c
 DOS_OBJS = $(DOS_SRCS:.c=.dos.o)
 
+UNKNOWN64_CC ?= x86_64-elf-gcc
+UNKNOWN64_TARGET = ectxt_unknown64.elf
+UNKNOWN64_LDFLAGS = -nostdlib -static -Wl,-e,_start
+UNKNOWN64_SRCS = $(CORE_SRCS) src/hal/hal_unknownos.c
+UNKNOWN64_OBJS = $(UNKNOWN64_SRCS:.c=.unk64.o)
+
+UNKNOWN32_CC ?= i686-elf-gcc
+UNKNOWN32_TARGET = ectxt_unknown32.elf
+UNKNOWN32_LDFLAGS = -nostdlib -static -Wl,-e,_start
+UNKNOWN32_OBJS = $(UNKNOWN64_SRCS:.c=.unk32.o)
+
 all: $(WIN_TARGET)
 
 $(WIN_TARGET): $(WIN_OBJS)
@@ -64,6 +75,23 @@ $(DOS_TARGET): $(DOS_OBJS)
 
 %.dos.o: %.c
 	$(DOS_CC) $(DOS_CFLAGS) -c $< -o $@
+
+
+unknown64: $(UNKNOWN64_TARGET)
+
+$(UNKNOWN64_TARGET): $(UNKNOWN64_OBJS)
+	$(UNKNOWN64_CC) $(UNKNOWN64_OBJS) $(UNKNOWN64_LDFLAGS) -o $@
+
+%.unk64.o: %.c
+	$(UNKNOWN64_CC) $(CFLAGS) -c $< -o $@
+
+unknown32: $(UNKNOWN32_TARGET)
+
+$(UNKNOWN32_TARGET): $(UNKNOWN32_OBJS)
+	$(UNKNOWN32_CC) $(UNKNOWN32_OBJS) $(UNKNOWN32_LDFLAGS) -o $@
+
+%.unk32.o: %.c
+	$(UNKNOWN32_CC) $(CFLAGS) -c $< -o $@
 
 clean:
 	del /Q /F src\*.o src\libc\*.o src\hal\*.o src\core\*.o src\render\*.o $(WIN_TARGET) $(LINUX_TARGET) $(LINUX32_TARGET) 2>NUL || rm -f $(WIN_OBJS) $(LINUX_OBJS) $(LINUX32_OBJS) $(WIN_TARGET) $(LINUX_TARGET) $(LINUX32_TARGET)
