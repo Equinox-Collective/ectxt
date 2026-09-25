@@ -2,3 +2,8 @@
 *.o
 *.d
 *.exe
+*.elf
+*.com
+*.efi
+*.bin
+/.vscode/

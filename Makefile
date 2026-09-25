@@ -26,6 +26,13 @@ LINUX32_TARGET = ectxt_linux32.elf
 LINUX32_LDFLAGS = -nostdlib -static -Wl,-e,_start -lgcc
 LINUX32_OBJS = $(LINUX_SRCS:.c=.linux32.o)
 
+DOS_CC ?= i686-elf-gcc
+DOS_TARGET = ectxt.com
+DOS_CFLAGS = -std=c99 -m16 -march=i386 -ffreestanding -nostdlib -Os -fno-pie -fno-asynchronous-unwind-tables -Isrc/libc -Isrc -Isrc/hal -Isrc/core -Isrc/render
+DOS_LDFLAGS = -Wl,-m,elf_i386 -Wl,-T,dos.ld -nostdlib
+DOS_SRCS = $(CORE_SRCS) src/hal/hal_dos.c
+DOS_OBJS = $(DOS_SRCS:.c=.dos.o)
+
 all: $(WIN_TARGET)
 
 $(WIN_TARGET): $(WIN_OBJS)
@@ -49,6 +56,14 @@ $(LINUX32_TARGET): $(LINUX32_OBJS)
 
 %.linux32.o: %.c
 	$(LINUX32_CC) $(CFLAGS) -c $< -o $@
+
+dos: $(DOS_TARGET)
+
+$(DOS_TARGET): $(DOS_OBJS)
+	$(DOS_CC) $(DOS_OBJS) $(DOS_LDFLAGS) -o $@
+
+%.dos.o: %.c
+	$(DOS_CC) $(DOS_CFLAGS) -c $< -o $@
 
 clean:
 	del /Q /F src\*.o src\libc\*.o src\hal\*.o src\core\*.o src\render\*.o $(WIN_TARGET) $(LINUX_TARGET) $(LINUX32_TARGET) 2>NUL || rm -f $(WIN_OBJS) $(LINUX_OBJS) $(LINUX32_OBJS) $(WIN_TARGET) $(LINUX_TARGET) $(LINUX32_TARGET)

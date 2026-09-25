@@ -3,7 +3,7 @@
 #include "../libc/string.h"
 #include "../libc/stdio.h"
 
-#define FRAME_BUFFER_SIZE 65536
+#define FRAME_BUFFER_SIZE 8192
 
 int render_init(RenderContext *ctx) {
     ctx->screen_cols = 80;
