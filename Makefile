@@ -16,14 +16,14 @@ WIN_OBJS = $(WIN_SRCS:.c=.win.o)
 # Linux x86_64 Target
 LINUX_CC ?= x86_64-elf-gcc
 LINUX_TARGET = ectxt_linux.elf
-LINUX_LDFLAGS = -nostdlib -static -Wl,-e,_start
+LINUX_LDFLAGS = -nostdlib -static -Wl,-e,_start -lgcc
 LINUX_SRCS = $(CORE_SRCS) src/hal/hal_linux.c
 LINUX_OBJS = $(LINUX_SRCS:.c=.linux.o)
 
 # Linux i686 (32-bit for WebVM / 32-bit kernels) Target
 LINUX32_CC ?= i686-elf-gcc
 LINUX32_TARGET = ectxt_linux32.elf
-LINUX32_LDFLAGS = -nostdlib -static -Wl,-e,_start
+LINUX32_LDFLAGS = -nostdlib -static -Wl,-e,_start -lgcc
 LINUX32_OBJS = $(LINUX_SRCS:.c=.linux32.o)
 
 all: $(WIN_TARGET)

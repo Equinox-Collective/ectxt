@@ -2,7 +2,7 @@
 #include "../libc/string.h"
 
 #define TCGETS      0x5401
-#define TCSETSF     0x5404
+#define TCSETS      0x5402
 #define TIOCGWINSZ  0x5413
 
 #define O_RDONLY    0
@@ -15,15 +15,15 @@
 #define MAP_PRIVATE 0x02
 #define MAP_ANON    0x20
 
+#define NCCS 19
+
 struct linux_termios {
     uint32_t c_iflag;
     uint32_t c_oflag;
     uint32_t c_cflag;
     uint32_t c_lflag;
     uint8_t  c_line;
-    uint8_t  c_cc[32];
-    uint32_t c_ispeed;
-    uint32_t c_ospeed;
+    uint8_t  c_cc[NCCS];
 };
 
 struct linux_winsize {
@@ -178,12 +178,13 @@ int hal_init(void) {
     raw.c_cc[6] = 1;
     raw.c_cc[5] = 0;
 
-    sys_call3(SYS_IOCTL, 0, TCSETSF, (intptr_t)&raw);
+    sys_call3(SYS_IOCTL, 0, TCSETS, (intptr_t)&raw);
     return 1;
 }
 
 void hal_shutdown(void) {
-    sys_call3(SYS_IOCTL, 0, TCSETSF, (intptr_t)&orig_termios);
+    sys_call3(SYS_IOCTL, 0, TCSETS, (intptr_t)&orig_termios);
+    hal_write("\r\n", 2);
 }
 
 void hal_get_term_size(int *cols, int *rows) {
