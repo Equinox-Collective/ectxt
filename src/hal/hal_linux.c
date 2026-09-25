@@ -1,15 +1,6 @@
 #include "hal.h"
 #include "../libc/string.h"
 
-#define SYS_READ    0
-#define SYS_WRITE   1
-#define SYS_OPEN    2
-#define SYS_CLOSE   3
-#define SYS_MMAP    9
-#define SYS_MUNMAP  11
-#define SYS_IOCTL   16
-#define SYS_EXIT    60
-
 #define TCGETS      0x5401
 #define TCSETSF     0x5404
 #define TIOCGWINSZ  0x5413
@@ -47,39 +38,135 @@ static const char *cli_filename = (void *)0;
 
 extern int ectxt_main(void);
 
-static inline int64_t sys_call1(int64_t num, int64_t a1) {
-    int64_t ret;
+#if defined(__x86_64__)
+
+#define SYS_READ    0
+#define SYS_WRITE   1
+#define SYS_OPEN    2
+#define SYS_CLOSE   3
+#define SYS_MMAP    9
+#define SYS_MUNMAP  11
+#define SYS_IOCTL   16
+#define SYS_EXIT    60
+
+static inline intptr_t sys_call1(intptr_t num, intptr_t a1) {
+    intptr_t ret;
     __asm__ volatile ("syscall" : "=a"(ret) : "a"(num), "D"(a1) : "rcx", "r11", "memory");
     return ret;
 }
 
-static inline int64_t sys_call2(int64_t num, int64_t a1, int64_t a2) {
-    int64_t ret;
+static inline intptr_t sys_call2(intptr_t num, intptr_t a1, intptr_t a2) {
+    intptr_t ret;
     __asm__ volatile ("syscall" : "=a"(ret) : "a"(num), "D"(a1), "S"(a2) : "rcx", "r11", "memory");
     return ret;
 }
 
-static inline int64_t sys_call3(int64_t num, int64_t a1, int64_t a2, int64_t a3) {
-    int64_t ret;
+static inline intptr_t sys_call3(intptr_t num, intptr_t a1, intptr_t a2, intptr_t a3) {
+    intptr_t ret;
     __asm__ volatile ("syscall" : "=a"(ret) : "a"(num), "D"(a1), "S"(a2), "d"(a3) : "rcx", "r11", "memory");
     return ret;
 }
 
-static inline int64_t sys_call6(int64_t num, int64_t a1, int64_t a2, int64_t a3, int64_t a4, int64_t a5, int64_t a6) {
-    int64_t ret;
-    register int64_t r10 __asm__("r10") = a4;
-    register int64_t r8  __asm__("r8")  = a5;
-    register int64_t r9  __asm__("r9")  = a6;
+static inline intptr_t sys_call6(intptr_t num, intptr_t a1, intptr_t a2, intptr_t a3, intptr_t a4, intptr_t a5, intptr_t a6) {
+    intptr_t ret;
+    register intptr_t r10 __asm__("r10") = a4;
+    register intptr_t r8  __asm__("r8")  = a5;
+    register intptr_t r9  __asm__("r9")  = a6;
     __asm__ volatile ("syscall" : "=a"(ret) : "a"(num), "D"(a1), "S"(a2), "d"(a3), "r"(r10), "r"(r8), "r"(r9) : "rcx", "r11", "memory");
     return ret;
 }
+
+void linux_entry(int64_t argc, char **argv) {
+    if (argc > 1) {
+        cli_filename = argv[1];
+    }
+    int code = ectxt_main();
+    sys_call1(SYS_EXIT, code);
+}
+
+__attribute__((naked)) void _start(void) {
+    __asm__ volatile (
+        "pop %rdi\n"
+        "mov %rsp, %rsi\n"
+        "call linux_entry\n"
+    );
+}
+
+#elif defined(__i386__)
+
+#define SYS_EXIT    1
+#define SYS_READ    3
+#define SYS_WRITE   4
+#define SYS_OPEN    5
+#define SYS_CLOSE   6
+#define SYS_IOCTL   54
+#define SYS_MMAP2   192
+#define SYS_MUNMAP  91
+
+static inline intptr_t sys_call1(intptr_t num, intptr_t a1) {
+    intptr_t ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(num), "b"(a1) : "memory");
+    return ret;
+}
+
+static inline intptr_t sys_call2(intptr_t num, intptr_t a1, intptr_t a2) {
+    intptr_t ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(num), "b"(a1), "c"(a2) : "memory");
+    return ret;
+}
+
+static inline intptr_t sys_call3(intptr_t num, intptr_t a1, intptr_t a2, intptr_t a3) {
+    intptr_t ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(num), "b"(a1), "c"(a2), "d"(a3) : "memory");
+    return ret;
+}
+
+static inline intptr_t sys_call6(intptr_t num, intptr_t a1, intptr_t a2, intptr_t a3, intptr_t a4, intptr_t a5, intptr_t a6) {
+    intptr_t ret;
+    intptr_t args[6] = { a1, a2, a3, a4, a5, a6 };
+    __asm__ volatile (
+        "pushl %%ebp\n"
+        "movl 0(%2), %%ebx\n"
+        "movl 4(%2), %%ecx\n"
+        "movl 8(%2), %%edx\n"
+        "movl 12(%2), %%esi\n"
+        "movl 16(%2), %%edi\n"
+        "movl 20(%2), %%ebp\n"
+        "int $0x80\n"
+        "popl %%ebp\n"
+        : "=a"(ret)
+        : "a"(num), "r"(args)
+        : "ebx", "ecx", "edx", "esi", "edi", "memory"
+    );
+    return ret;
+}
+
+void linux_entry(int argc, char **argv) {
+    if (argc > 1) {
+        cli_filename = argv[1];
+    }
+    int code = ectxt_main();
+    sys_call1(SYS_EXIT, code);
+}
+
+__attribute__((naked)) void _start(void) {
+    __asm__ volatile (
+        "popl %eax\n"
+        "movl %esp, %edx\n"
+        "pushl %edx\n"
+        "pushl %eax\n"
+        "call linux_entry\n"
+    );
+}
+
+#endif
 
 const char *hal_get_cli_argument(void) {
     return cli_filename;
 }
 
 int hal_init(void) {
-    if (sys_call3(SYS_IOCTL, 0, TCGETS, (int64_t)&orig_termios) < 0) {
+    if (sys_call3(SYS_IOCTL, 0, TCGETS, (intptr_t)&orig_termios) < 0) {
         return 0;
     }
 
@@ -91,17 +178,17 @@ int hal_init(void) {
     raw.c_cc[6] = 1;
     raw.c_cc[5] = 0;
 
-    sys_call3(SYS_IOCTL, 0, TCSETSF, (int64_t)&raw);
+    sys_call3(SYS_IOCTL, 0, TCSETSF, (intptr_t)&raw);
     return 1;
 }
 
 void hal_shutdown(void) {
-    sys_call3(SYS_IOCTL, 0, TCSETSF, (int64_t)&orig_termios);
+    sys_call3(SYS_IOCTL, 0, TCSETSF, (intptr_t)&orig_termios);
 }
 
 void hal_get_term_size(int *cols, int *rows) {
     struct linux_winsize ws;
-    if (sys_call3(SYS_IOCTL, 1, TIOCGWINSZ, (int64_t)&ws) == 0 && ws.ws_col > 0) {
+    if (sys_call3(SYS_IOCTL, 1, TIOCGWINSZ, (intptr_t)&ws) == 0 && ws.ws_col > 0) {
         *cols = (int)ws.ws_col;
         *rows = (int)ws.ws_row;
     } else {
@@ -111,11 +198,11 @@ void hal_get_term_size(int *cols, int *rows) {
 }
 
 void hal_write(const void *buf, size_t len) {
-    sys_call3(SYS_WRITE, 1, (int64_t)buf, (int64_t)len);
+    sys_call3(SYS_WRITE, 1, (intptr_t)buf, (intptr_t)len);
 }
 
 static int hal_read_byte(uint8_t *b) {
-    int64_t ret = sys_call3(SYS_READ, 0, (int64_t)b, 1);
+    intptr_t ret = sys_call3(SYS_READ, 0, (intptr_t)b, 1);
     return ret == 1;
 }
 
@@ -161,19 +248,23 @@ int hal_read_key(void) {
 }
 
 void *hal_alloc(size_t size) {
-    int64_t ret = sys_call6(SYS_MMAP, 0, (int64_t)size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
-    if (ret < 0) return (void *)0;
+#if defined(__x86_64__)
+    intptr_t ret = sys_call6(SYS_MMAP, 0, (intptr_t)size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+#else
+    intptr_t ret = sys_call6(SYS_MMAP2, 0, (intptr_t)size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+#endif
+    if ((uintptr_t)ret >= (uintptr_t)-4095) return (void *)0;
     return (void *)ret;
 }
 
 void hal_free(void *ptr, size_t size) {
     if (ptr) {
-        sys_call2(SYS_MUNMAP, (int64_t)ptr, (int64_t)size);
+        sys_call2(SYS_MUNMAP, (intptr_t)ptr, (intptr_t)size);
     }
 }
 
 int hal_file_read(const char *path, char **out_buf, size_t *out_size) {
-    int64_t fd = sys_call3(SYS_OPEN, (int64_t)path, O_RDONLY, 0);
+    intptr_t fd = sys_call3(SYS_OPEN, (intptr_t)path, O_RDONLY, 0);
     if (fd < 0) return 0;
 
     size_t cap = 4096;
@@ -199,7 +290,7 @@ int hal_file_read(const char *path, char **out_buf, size_t *out_size) {
             cap = new_cap;
         }
 
-        int64_t rd = sys_call3(SYS_READ, fd, (int64_t)(buf + total), 1024);
+        intptr_t rd = sys_call3(SYS_READ, fd, (intptr_t)(buf + total), 1024);
         if (rd <= 0) break;
         total += (size_t)rd;
     }
@@ -213,18 +304,18 @@ int hal_file_read(const char *path, char **out_buf, size_t *out_size) {
 }
 
 int hal_file_write_chunks(const char *path, const void *p1, size_t n1, const void *p2, size_t n2) {
-    int64_t fd = sys_call3(SYS_OPEN, (int64_t)path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    intptr_t fd = sys_call3(SYS_OPEN, (intptr_t)path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) return 0;
 
     if (n1 > 0) {
-        if (sys_call3(SYS_WRITE, fd, (int64_t)p1, (int64_t)n1) != (int64_t)n1) {
+        if (sys_call3(SYS_WRITE, fd, (intptr_t)p1, (intptr_t)n1) != (intptr_t)n1) {
             sys_call1(SYS_CLOSE, fd);
             return 0;
         }
     }
 
     if (n2 > 0) {
-        if (sys_call3(SYS_WRITE, fd, (int64_t)p2, (int64_t)n2) != (int64_t)n2) {
+        if (sys_call3(SYS_WRITE, fd, (intptr_t)p2, (intptr_t)n2) != (intptr_t)n2) {
             sys_call1(SYS_CLOSE, fd);
             return 0;
         }
@@ -232,20 +323,4 @@ int hal_file_write_chunks(const char *path, const void *p1, size_t n1, const voi
 
     sys_call1(SYS_CLOSE, fd);
     return 1;
-}
-
-void linux_entry(int64_t argc, char **argv) {
-    if (argc > 1) {
-        cli_filename = argv[1];
-    }
-    int code = ectxt_main();
-    sys_call1(SYS_EXIT, code);
-}
-
-__attribute__((naked)) void _start(void) {
-    __asm__ volatile (
-        "pop %rdi\n"
-        "mov %rsp, %rsi\n"
-        "call linux_entry\n"
-    );
 }
