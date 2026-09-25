@@ -69,10 +69,15 @@ static inline intptr_t sys_call3(intptr_t num, intptr_t a1, intptr_t a2, intptr_
 
 static inline intptr_t sys_call6(intptr_t num, intptr_t a1, intptr_t a2, intptr_t a3, intptr_t a4, intptr_t a5, intptr_t a6) {
     intptr_t ret;
-    register intptr_t r10 __asm__("r10") = a4;
-    register intptr_t r8  __asm__("r8")  = a5;
-    register intptr_t r9  __asm__("r9")  = a6;
-    __asm__ volatile ("syscall" : "=a"(ret) : "a"(num), "D"(a1), "S"(a2), "d"(a3), "r"(r10), "r"(r8), "r"(r9) : "rcx", "r11", "memory");
+    __asm__ volatile (
+        "movq %5, %%r10\n"
+        "movq %6, %%r8\n"
+        "movq %7, %%r9\n"
+        "syscall\n"
+        : "=a"(ret)
+        : "a"(num), "D"(a1), "S"(a2), "d"(a3), "r"(a4), "r"(a5), "r"(a6)
+        : "rcx", "r11", "r10", "r8", "r9", "memory"
+    );
     return ret;
 }
 
@@ -86,9 +91,16 @@ void linux_entry(int64_t argc, char **argv) {
 
 __attribute__((naked)) void _start(void) {
     __asm__ volatile (
-        "pop %rdi\n"
-        "mov %rsp, %rsi\n"
+        "xorq %%rbp, %%rbp\n"
+        "movq (%%rsp), %%rdi\n"
+        "leaq 8(%%rsp), %%rsi\n"
+        "andq $-16, %%rsp\n"
         "call linux_entry\n"
+        "movq %%rax, %%rdi\n"
+        "movq $60, %%rax\n"
+        "syscall\n"
+        "hlt\n"
+        : : : "memory"
     );
 }
 
@@ -151,11 +163,18 @@ void linux_entry(int argc, char **argv) {
 
 __attribute__((naked)) void _start(void) {
     __asm__ volatile (
-        "popl %eax\n"
-        "movl %esp, %edx\n"
-        "pushl %edx\n"
-        "pushl %eax\n"
+        "xorl %%ebp, %%ebp\n"
+        "movl (%%esp), %%eax\n"
+        "leal 4(%%esp), %%edx\n"
+        "andl $-16, %%esp\n"
+        "pushl %%edx\n"
+        "pushl %%eax\n"
         "call linux_entry\n"
+        "movl %%eax, %%ebx\n"
+        "movl $1, %%eax\n"
+        "int $0x80\n"
+        "hlt\n"
+        : : : "memory"
     );
 }
 
