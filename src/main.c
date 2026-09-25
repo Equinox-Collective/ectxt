@@ -2,42 +2,42 @@
 #include "core/buffer.h"
 #include "render/render.h"
 #include "libc/string.h"
-
-__declspec(dllimport) void   __stdcall ExitProcess(uint32_t uExitCode);
-__declspec(dllimport) char * __stdcall GetCommandLineA(void);
-
-void __main(void) {}
+#include "libc/stdio.h"
 
 void term_print(const char *str) {
     hal_write(str, strlen(str));
 }
 
-static void parse_argument(const char *cmd, char *out_path, size_t max_len) {
-    out_path[0] = '\0';
-    while (*cmd == ' ') cmd++;
-    if (*cmd == '"') {
-        cmd++;
-        while (*cmd && *cmd != '"') cmd++;
-        if (*cmd == '"') cmd++;
-    } else {
-        while (*cmd && *cmd != ' ') cmd++;
-    }
+static int prompt_filename(RenderContext *render, const GapBuffer *gb, char *out_buf, size_t max_len) {
+    size_t len = 0;
+    out_buf[0] = '\0';
 
-    while (*cmd == ' ') cmd++;
-    if (!*cmd) return;
+    while (1) {
+        char prompt_msg[128];
+        snprintf(prompt_msg, sizeof(prompt_msg), "Save as: %s_", out_buf);
+        render_set_message(render, prompt_msg);
+        render_update(render, gb, (void *)0, 1);
 
-    size_t i = 0;
-    if (*cmd == '"') {
-        cmd++;
-        while (*cmd && *cmd != '"' && i < max_len - 1) {
-            out_path[i++] = *cmd++;
-        }
-    } else {
-        while (*cmd && *cmd != ' ' && i < max_len - 1) {
-            out_path[i++] = *cmd++;
+        int key = hal_read_key();
+        if (key == KEY_NONE) continue;
+
+        if (key == KEY_ENTER) {
+            if (len > 0) {
+                render->status_msg[0] = '\0';
+                return 1;
+            }
+        } else if (key == KEY_ESCAPE) {
+            render_set_message(render, "Save cancelled.");
+            return 0;
+        } else if (key == KEY_BACKSPACE) {
+            if (len > 0) {
+                out_buf[--len] = '\0';
+            }
+        } else if (key >= 32 && key <= 126 && len < max_len - 1) {
+            out_buf[len++] = (char)key;
+            out_buf[len] = '\0';
         }
     }
-    out_path[i] = '\0';
 }
 
 int ectxt_main(void) {
@@ -50,7 +50,12 @@ int ectxt_main(void) {
     }
 
     char filename[256];
-    parse_argument(GetCommandLineA(), filename, sizeof(filename));
+    filename[0] = '\0';
+    const char *cli_arg = hal_get_cli_argument();
+    if (cli_arg) {
+        strncpy(filename, cli_arg, sizeof(filename) - 1);
+        filename[sizeof(filename) - 1] = '\0';
+    }
 
     int is_dirty = 0;
     if (filename[0]) {
@@ -86,7 +91,12 @@ int ectxt_main(void) {
                 running = 0;
                 break;
             case KEY_CTRL_S:
-                if (filename[0]) {
+                if (!filename[0]) {
+                    if (!prompt_filename(&render, &gb, filename, sizeof(filename))) {
+                        break;
+                    }
+                }
+                {
                     const char *p1, *p2;
                     size_t n1, n2;
                     gb_get_chunks(&gb, &p1, &n1, &p2, &n2);
@@ -96,8 +106,6 @@ int ectxt_main(void) {
                     } else {
                         render_set_message(&render, "Error saving file!");
                     }
-                } else {
-                    render_set_message(&render, "No filename specified!");
                 }
                 break;
             case KEY_ARROW_LEFT:  gb_move_left(&gb); break;
@@ -139,9 +147,4 @@ int ectxt_main(void) {
     gb_free(&gb);
     hal_shutdown();
     return 0;
-}
-
-void mainCRTStartup(void) {
-    int ret = ectxt_main();
-    ExitProcess((uint32_t)ret);
 }

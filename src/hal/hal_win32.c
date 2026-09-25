@@ -213,3 +213,48 @@ int hal_file_write_chunks(const char *path, const void *p1, size_t n1, const voi
     CloseHandle(h_file);
     return 1;
 }
+
+__declspec(dllimport) char * __stdcall GetCommandLineA(void);
+__declspec(dllimport) void   __stdcall ExitProcess(uint32_t uExitCode);
+
+extern int ectxt_main(void);
+
+static char cli_arg_buf[256];
+
+void __main(void) {}
+
+const char *hal_get_cli_argument(void) {
+    const char *cmd = GetCommandLineA();
+    cli_arg_buf[0] = '\0';
+
+    while (*cmd == ' ') cmd++;
+    if (*cmd == '"') {
+        cmd++;
+        while (*cmd && *cmd != '"') cmd++;
+        if (*cmd == '"') cmd++;
+    } else {
+        while (*cmd && *cmd != ' ') cmd++;
+    }
+
+    while (*cmd == ' ') cmd++;
+    if (!*cmd) return (void *)0;
+
+    size_t i = 0;
+    if (*cmd == '"') {
+        cmd++;
+        while (*cmd && *cmd != '"' && i < sizeof(cli_arg_buf) - 1) {
+            cli_arg_buf[i++] = *cmd++;
+        }
+    } else {
+        while (*cmd && *cmd != ' ' && i < sizeof(cli_arg_buf) - 1) {
+            cli_arg_buf[i++] = *cmd++;
+        }
+    }
+    cli_arg_buf[i] = '\0';
+    return cli_arg_buf;
+}
+
+void mainCRTStartup(void) {
+    int ret = ectxt_main();
+    ExitProcess((uint32_t)ret);
+}
