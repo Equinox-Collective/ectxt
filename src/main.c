@@ -112,6 +112,10 @@ int ectxt_main(void) {
             case KEY_ARROW_RIGHT: gb_move_right(&gb); break;
             case KEY_ARROW_UP:    gb_move_up(&gb); break;
             case KEY_ARROW_DOWN:  gb_move_down(&gb); break;
+            case KEY_CTRL_C:
+            case 24: // Ctrl+X (Nano Style)
+                running = 0;
+                break;
             case KEY_BACKSPACE:
                 gb_delete_back(&gb);
                 is_dirty = 1;

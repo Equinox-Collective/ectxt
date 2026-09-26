@@ -15,15 +15,15 @@
 #define MAP_PRIVATE 0x02
 #define MAP_ANON    0x20
 
-#define NCCS 19
-
 struct linux_termios {
     uint32_t c_iflag;
     uint32_t c_oflag;
     uint32_t c_cflag;
     uint32_t c_lflag;
     uint8_t  c_line;
-    uint8_t  c_cc[NCCS];
+    uint8_t  c_cc[32];
+    uint32_t c_ispeed;
+    uint32_t c_ospeed;
 };
 
 struct linux_winsize {
